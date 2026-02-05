@@ -1,7 +1,6 @@
 from collections import namedtuple, defaultdict
 from typing import Callable, Any, Iterable
 
-from .deck_config import DeckConfig
 from .json_serializable import JsonSerializableAnkiDict
 from .note_model import NoteModel
 from ..anki.adapters.file_provider import FileProvider
@@ -9,9 +8,8 @@ from ..importer.import_dialog import ImportConfig
 from ..utils import utils
 from ..utils.constants import UUID_FIELD_NAME
 from ..utils.uuid import UuidFetcher
-from ..utils.notifier import AnkiModalNotifier
 
-DeckMetadata = namedtuple("DeckMetadata", ["deck_configs", "models"])
+DeckMetadata = namedtuple("DeckMetadata", ["models"])
 
 
 class Deck(JsonSerializableAnkiDict):
@@ -29,7 +27,9 @@ class Deck(JsonSerializableAnkiDict):
                             "collapsed",
                             "is_child",  # runtime-relevant
                             "conf",  # uuid
-                            "file_provider_supplier"
+                            "file_provider_supplier",
+                            "deck_configurations",
+                            "deck_config_uuid"
                         }
 
     import_filter_set = JsonSerializableAnkiDict.import_filter_set | \
@@ -53,7 +53,6 @@ class Deck(JsonSerializableAnkiDict):
         self.notes = []
         self.children = []
         self.metadata = None
-        self.deck_config_uuid = None
 
     def flatten(self):
         """
@@ -75,30 +74,13 @@ class Deck(JsonSerializableAnkiDict):
 
     def _load_metadata(self):
         if not self.metadata:
-            self.metadata = DeckMetadata({}, {})
-
-        self._load_deck_config()
-
-    def _load_deck_config(self):
-        # Todo switch to uuid
-        new_config = DeckConfig.from_collection(self.collection, self.anki_dict["conf"])
-        self.deck_config_uuid = new_config.get_uuid()
-
-        # TODO Remove this once enough time has passed that #106/#116
-        # is no longer an issue — i.e. when there are likely no more
-        # Anki dbs with a `deck_config_uuid` attached to the deck.
-        # See #133.
-        if "deck_config_uuid" in self.anki_dict:
-            del self.anki_dict["deck_config_uuid"]
-
-        self.metadata.deck_configs.setdefault(new_config.get_uuid(), new_config)
+            self.metadata = DeckMetadata({})
 
     def serialization_dict(self):
         return utils.merge_dicts(
             super(Deck, self).serialization_dict(),
             {"media_files": list(sorted(self.get_media_file_list(include_children=False)))},
-            {"note_models": list(self.metadata.models.values()),
-             "deck_configurations": list(self.metadata.deck_configs.values())} if not self.is_child else {})
+            {"note_models": list(self.metadata.models.values())} if not self.is_child else {})
 
     def get_media_file_list(self, data_from_models=True, include_children=True):
         media = set()
@@ -124,19 +106,13 @@ class Deck(JsonSerializableAnkiDict):
 
     def _load_metadata_from_json(self, json_dict):
         if not self.metadata:
-            self.metadata = DeckMetadata({}, {})
+            self.metadata = DeckMetadata({})
 
         note_models_list = [NoteModel.from_json(model) for model in json_dict.get("note_models", [])]
         new_models = utils.merge_dicts(self.metadata.models,
                                        {model.get_uuid(): model for model in note_models_list})
 
-        deck_config_list = [DeckConfig.from_json(deck_config) for deck_config in
-                            json_dict.get("deck_configurations", [])]
-
-        new_deck_configs = utils.merge_dicts(self.metadata.deck_configs,
-                                             {deck_config.get_uuid(): deck_config for deck_config in deck_config_list})
-
-        self.metadata = DeckMetadata(new_deck_configs, new_models)
+        self.metadata = DeckMetadata(new_models)
 
     def save_to_collection(self, collection, import_config: ImportConfig):
         self.save_metadata(collection)
@@ -147,9 +123,6 @@ class Deck(JsonSerializableAnkiDict):
                                   import_config=import_config)
 
     def save_metadata(self, collection):
-        for config in self.metadata.deck_configs.values():
-            config.save_to_collection(collection)
-
         for note_model in self.metadata.models.values():
             note_model.save_to_collection(collection)
 
@@ -183,21 +156,6 @@ class Deck(JsonSerializableAnkiDict):
 
         self.anki_dict = deck_dict
         self.anki_dict["name"] = full_name
-
-        try:
-            self.anki_dict["conf"] = self.metadata.deck_configs[self.deck_config_uuid].anki_dict["id"]
-            # TODO Remove the exception-handling once we're confident
-            # that there are no more buggy decks, with mismatching
-            # `deck_config_uuid`s.
-            # See #133.
-        except KeyError as error:
-            AnkiModalNotifier().error("Incorrect deck config",
-                                      "The deck config uuid {} is not present in the deck. "
-                                      "This is likely due to a now-fixed bug in CrowdAnki. "
-                                      "Please ask the maintainer of the deck to re-export it, if possible. "
-                                      "See here: https://github.com/Stvad/CrowdAnki/issues/106 "
-                                      "for details and alternative solutions.".format(error))
-            raise
 
         collection.decks.save(deck_dict)
 

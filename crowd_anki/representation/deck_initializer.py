@@ -43,7 +43,6 @@ def from_json(json_dict, deck_metadata=None) -> Deck:
     if not deck.metadata:  # Todo mental check. The idea is that children don't have metadata
         deck._load_metadata_from_json(json_dict)
 
-    deck.deck_config_uuid = json_dict["deck_config_uuid"]
     deck.notes = [Note.from_json(json_note) for json_note in json_dict["notes"]]
     deck.children = [from_json(child, deck_metadata=deck.metadata) for child in json_dict["children"]]
 

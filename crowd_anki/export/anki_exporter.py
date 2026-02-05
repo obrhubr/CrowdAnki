@@ -58,13 +58,13 @@ class AnkiJsonExporter(DeckExporter):
     def _save_changes(self, deck, is_export_child=False):
         """Save updates that were made during the export. E.g. UUID fields
 
-        It saves decks, deck configurations and models.
+        It saves decks and models.
 
         is_export_child refers to whether this deck is a child for the
         _purposes of the current export operation_.  For instance, if
         we're exporting or snapshotting a specific subdeck, then it's
         considered the "parent" here.  We need the argument to avoid
-        duplicately saving deck configs and note models.
+        duplicately saving note models.
 
         """
 
@@ -73,9 +73,6 @@ class AnkiJsonExporter(DeckExporter):
             self._save_changes(child_deck, is_export_child=True)
 
         if not is_export_child:
-            for deck_config in deck.metadata.deck_configs.values():
-                self.collection.decks.save(deck_config.anki_dict)
-
             for model in deck.metadata.models.values():
                 self.collection.models.save(model.anki_dict)
 

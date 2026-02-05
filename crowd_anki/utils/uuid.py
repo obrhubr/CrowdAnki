@@ -12,9 +12,6 @@ from ..utils.constants import UUID_FIELD_NAME
 class UuidFetcher:
     collection: Collection
 
-    def get_deck_config(self, uuid: str):
-        return get_value_by_uuid(self.collection.decks.all_config(), uuid)
-
     def get_deck(self, uuid: str):
         return get_value_by_uuid(self.collection.decks.all(), uuid)
 
