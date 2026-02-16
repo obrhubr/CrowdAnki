@@ -2,6 +2,11 @@ name: Package plugin
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to checkout'
+        required: false
+        default: ''
   push:
     tags:
       - '*'
@@ -12,6 +17,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.inputs.ref || github.ref }}
 
     - name: Set up Python 3.10
       uses: actions/setup-python@v2
