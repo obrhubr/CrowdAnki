@@ -40,3 +40,13 @@ jobs:
       with:
         name: crowd-anki-packaged-plugin
         path: crowd_anki_*.zip
+
+    - name: Rename to .ankiaddon
+      run: |
+        mv crowd_anki_*.zip crowd_anki.ankiaddon
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: crowd_anki.ankiaddon
